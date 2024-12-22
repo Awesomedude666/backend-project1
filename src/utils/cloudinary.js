@@ -25,6 +25,8 @@ const uploadOnCloudinary = async(localFilePath)=>{
     }
 }
 
+export default uploadOnCloudinary;
+
 
 // we do uploading process in 2 steps . first we collect user file and put in on our server and then 
 // upload it to cloudinary so that if there is any issue we can handle it on our server side

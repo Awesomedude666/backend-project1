@@ -21,3 +21,6 @@ class ApiError extends error{
         }
     }
 }
+
+
+export default ApiError;

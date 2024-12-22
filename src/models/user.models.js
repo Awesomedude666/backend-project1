@@ -49,10 +49,10 @@ const userSchema = new mongoose.Schema(
 
     },{timestamps:true})
 
-userSchema.pre("save",function(){
+userSchema.pre("save",async function(next){
     if(!this.isModified("password")) return next(); //if password is not modified then we don't need to hash it everytime.
     // isModified is a default function to check if modified
-    this.password = bcrypt.hash(this.password,10)// 10 is no of rounds in the algorothm of bcrypt( can be changed)
+    this.password = await bcrypt.hash(this.password,10)// 10 is no of rounds in the algorothm of bcrypt( can be changed)
     next()
 })
 
