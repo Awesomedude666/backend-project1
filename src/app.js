@@ -21,4 +21,21 @@ app.use(express.static("public"))
 app.use(cookieParser())
 
 
+import userRouter from './routes/user.routes.js'
+
+//we wrote app.get() previously because we were doing everything here itself router and controller everything
+// but now as router and controller got separated from the app file . we need to use middleware in b|w so we use app.use() here.
+
+app.use("/api/v1/users",userRouter) // 1st parameter is the path where middleware is applied and 2nd parameter is the router
+
+
+//to register the user need to go to 
+//http://localhost:3000/api/v1/users/register;
+
+//when a user types /users we give control to userRouter
+
+
+
+
+
 export default app

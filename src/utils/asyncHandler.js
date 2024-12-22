@@ -1,11 +1,11 @@
 const asyncHandler = (requestHandler)=>{
-    (req,res,next) =>{
+    return (req,res,next) =>{
         Promise.resolve(requestHandler(req,res,next))
         .catch((error)=>next(error))
     }
 }
 
-
+// async handler is a higher order function which a function as an argument;
 // next is a function . by calling next the error is passed to 
 //next error handling middleware in express.
 

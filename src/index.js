@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 import connectDB from './db/index.js'
-import {app} from './app.js'
+import app from './app.js'
 
 dotenv.config();
 
@@ -14,6 +14,9 @@ connectDB()
     console.log("MongoDb connection failed",error);
 })
 
+//the functions defined in the app will be executed when the server starts
+//listening for incoming requests.
+//app.listen() starts the server and allows it to handle requests.
 
 
 
