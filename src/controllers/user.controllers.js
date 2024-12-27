@@ -4,6 +4,25 @@ import { User } from '../models/user.models.js';
 import uploadOnCloudinary from '../utils/cloudinary.js';
 import ApiResponse from '../utils/ApiResponse.js';
 
+
+
+
+const generateAccessandRefreshTokens = async (userId) => {
+    try {
+        const user = await User.findById(userId);
+        const accessToken = user.generateAccessToken() // as these methods are in user schema we can use them with instance user but not with class User.
+        const refreshToken = user.generateRefreshToken()
+        user.refreshToken = refreshToken //added to user
+        await user.save({validateBeforeSave:false})  //method to save to db but it needs all the required fields to save any data so we disabled the validation
+        //as we dont want to validate again with refresh token.
+        return {accessToken,refreshToken}
+    } catch (error) {
+        throw new ApiError(500, "Internal Server Error while generating access and refresh tokens");
+    }
+}
+
+//access token is given to the user but refresh token is also saved in our database becoz we dont want user to login again and again
+
 const registerUser = asyncHandler( async (req,res) =>{
     // get user details from frontend
     // validate details (not empty)
@@ -26,8 +45,8 @@ const registerUser = asyncHandler( async (req,res) =>{
 
    //now for checking whether user already exists or not ,
    // we will use the findOne (similar to find) method of the model
-   const existedUser =  User.findOne({
-    $or: [{email},{username}]  //this find the user with the email or username
+   const existedUser =  await User.findOne({
+    $or: [{email},{username}]  //this find the user with the email or username (mongodB operators (or) (and) etc...)
    })
 
    if(existedUser){
@@ -35,8 +54,18 @@ const registerUser = asyncHandler( async (req,res) =>{
    }
 
    //as we have added the middleware in the user.routes, for images , multer gives access to req.files
-   const avatarLocalPath = req.files?.avatar[0]?.path
-   const coverImageLocalPath = req.files?.coverImage[0]?.path
+   
+
+   console.log('req.files:', req.files);
+   const avatarLocalPath = req.files?.avatar[0]?.path // we have checked for avatar below whether present or not and if not we threw error
+//    const coverImageLocalPath = req.files?.coverImage[0]?.path // but we did not give any check for cover Image and we user coverImage variable 
+   // so it may give error. so we comment this and use another method.
+
+   let coverImageLocalPath;
+
+   if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+    coverImageLocalPath = req.files.coverImage[0].path;  //checking if req.files exist and if it is an array and of length > 0;
+   }
 
    //in the first object , avatar[0] we can have path in which multer has stored in our server.
 
@@ -85,12 +114,7 @@ const registerUser = asyncHandler( async (req,res) =>{
    )
 
    //createdUser is the data.
-
-
 })
-
-
-export default registerUser;
 
 // we used async here in the registerUSer function , so it returns a promise . 
 //and async handler resolves or rejects the promise.
@@ -101,4 +125,110 @@ export default registerUser;
 //when requestHandler is called, it passes req,res,next to registerUser
 //even though next is not used in register user , it is still available for error handling
 
+const loginUser = asyncHandler(async (req,res) =>{
+    // we take data form request body (req.body)
+    // username or email
+    // find the user
+    // check the password
+    // generate accesstoken and refreshtoken
+    // send cookie
+    //send response (logged in successful or not)
 
+    const {email,username,password} = req.body
+
+    if(!username || !email){
+        throw new ApiError(400,"username or email is required !");
+    }
+
+     const user = await User.findOne({
+        $or : [{username},{email}] //array of objects (await as server is in another continent)
+    })
+
+    if(!user){
+        throw new ApiError(404,"User doesnt exist");
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(password) //as bcrypt takes time.
+
+    if(!isPasswordValid){
+        throw new ApiError(401,"Invalid user credentials");
+    }
+
+    const {accessToken,refreshToken} = await generateAccessandRefreshTokens(user._id)
+
+    // we need to send cookies to the client and for that we need to send the properties of user and we dont want to send cartain fields like
+    // password , refresh token etc...
+    // so for that we once again find the user from the database and remove those fields and send the user to the client.
+
+    const loggedInUser = User.findById(user._id).select("-password -refreshToken");
+
+    const options = {
+        httpOnly: true,
+        secure: true,
+    }
+
+    // by default cookies have the property that they can be modified by anyone from the frontend.
+    // but by using httpOnly and secure , we can prevent that. they can only be modified by the server.
+    // they are seen from frontend but cannot be modified.
+
+    return res
+    .status(200)
+    .cookie("accessToken",accessToken,options)
+    .cookie("refreshToken",refreshToken,options)
+    .json(
+       new ApiResponse(
+        200,
+       {
+        user: loggedInUser,accessToken,refreshToken
+       },
+       "User loggedIn successfully"
+       )
+    )
+
+    // we are sending accessToken,refreshToken again in json even after setting in cookies bcoz if user wants to save the cookies in browser then he can save them.
+    // it is a good practice.
+
+})
+
+const logoutUser = asyncHandler(async(req,res) => {
+    await User.findByIdAndUpdate(      // another method . we can also find the userby id first and then update the refresh token.here it is done in a single go.
+        req.user._id,
+        {
+            $set:{
+                refreshToken:undefined
+            }
+        },
+        {
+            new:true                // when returned we get the new modified field value.(undefined refresh token).
+        }
+    )
+
+    const options = {
+        httpOnly: true,
+        secure: true,
+    }
+
+    // we have to clear the cookies.
+
+    return res
+    .status(200)
+    .clearCookie("accessToken",options)
+    .clearCookie("refreshToken",options)
+    .json(
+        new ApiResponse(
+            200,
+            {},
+            "user logged out"
+        )
+    )
+
+    
+
+})
+
+
+export{
+    registerUser,
+    loginUser,
+    logoutUser,
+}

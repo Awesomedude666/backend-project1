@@ -2,7 +2,11 @@ import dotenv from 'dotenv'
 import connectDB from './db/index.js'
 import app from './app.js'
 
-dotenv.config();
+dotenv.config(
+    {
+        path:"./.env"
+    }
+);
 
 connectDB()
 .then(()=>{
@@ -13,6 +17,8 @@ connectDB()
 .catch((error)=>{
     console.log("MongoDb connection failed",error);
 })
+
+
 
 //the functions defined in the app will be executed when the server starts
 //listening for incoming requests.
