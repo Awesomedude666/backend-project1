@@ -279,9 +279,141 @@ const refreshAccessToken = asyncHandler(async(req,res)=>{
 // we do this by using the refresh token , which can be accessed from the cookies.
 
 
+const changeCurrentPassword = asyncHandler(async(req,res)=>{
+    const {oldPassword,newPassword} = req.body;
+
+    // to change the password user should be logged in first and we check that using the middleware.
+    // if auth.middleware is executed then we get req.user = user.
+
+    // so we can access user here.
+
+    const user = await User.findById(req.user?._id);
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword) // as this method is defined in user model.
+
+    if(!isPasswordCorrect){
+        throw new ApiError(400,'Invalid old password');
+    }
+
+    user.password = newPassword;
+    // wew set the password but we did not save it 
+    // if we save it then the pre hook is called and it will encrypt the password.
+    // so we need to save it manually using save method.
+    await user.save(
+        {validateBeforeSave: false}   // we dont want validations again
+    );
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,{},"Password changed successfully")); 
+
+ })
+
+ const getCurrentUser = asyncHandler(async(req,res)=>{
+    return res
+    .status(200)
+    .json(new ApiResponse(200,req.user,"current user fetched successfully"))
+ })
+
+ const updateAccountDetails = asyncHandler(async(req,res)=>{
+    const {fullName,email} = req.body;
+
+    if(!fullName || !email){
+        throw new ApiError(400,'Please provide both full name and email');
+    }
+
+    // as we do middleware before this , we have req.user
+
+    const user = User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                fullName,
+                email,
+            }
+        },
+        {new: true} // (new:true) will return the updated user so that we can save it 
+    ).select("-password");
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,user,"Account details updated successfully"));
+
+ })
+
+ const updateUserAvatar = asyncHandler(async(req,res)=>{
+    // avatar cannot be taken form body like {avatar} = req.body 
+    // we need to use req.file as we injected a middleware while uploading avatar.
+    const avatarLocalPath = req.file?.path // as we are talking about only one file we use file here . but previously we used upload.fields in middleware so we used req.files there.
+
+    if(!avatarLocalPath){
+        throw new ApiError(400,'Please upload an avatar');
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+    if (!avatar.url) {
+        throw new ApiError(400, 'Failed to upload avatar');
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                avatar: avatar.url
+            }
+        },
+        {
+            new: true,
+        }
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,user,"avatar updated successfully")
+    )
+
+ })
+
+ const updateUserCoverImage = asyncHandler(async(req,res)=>{
+    const coverImageLocalPath = req.file?.path
+    if(!coverImageLocalPath){
+        throw new ApiError(400,'Please upload a cover image');
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+    if (!coverImage.url) {
+        throw new ApiError(400, 'Failed to upload cover image');
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                coverImage: coverImage.url,
+            }
+        },
+        { new: true }
+    ).select("-password");
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,user,"cover image updated successfully")
+    )
+
+ })
+
+
+
 export{
     registerUser,
     loginUser,
     logoutUser,
     refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverImage,
 }
