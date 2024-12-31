@@ -1,6 +1,8 @@
 import mongoose from 'mongoose'
 import mongooseAggregatePaginate from 'mongoose-aggregate-paginate-v2'
 
+// mongoose-aggregate-paginate makes all the videos in the database visible to the client page by page as all the videos cannot be displayed at once.
+// same process is used for comments etc...
 
 const videoSchema = new mongoose.Schema(
     {
