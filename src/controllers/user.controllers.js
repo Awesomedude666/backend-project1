@@ -404,6 +404,154 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 
  })
 
+ const getUserChannelProfile = asyncHandler(async(req,res)=>{
+    const {username} = req.params // as we need to go to channel url to get channel profile. it is in req.params
+    if (!username?.trim()) {
+        throw new ApiError(400, 'Username is required');
+    }
+
+    // when fetching a users channel profile, we need to join data form multiple collections(eg. users,subscriptions,videos tec..)
+    // so we use aggregate pipelines to join these data.
+    // match to filter the data, lookup to join the data, project to select
+    // match filters the document based on specific query. matched documents are passed to the next stage of pipeline.
+    // so we got the document of the user we are looking for . then we use lookup to join the data from other collections.
+    // lookup joins two collections based on a field in one collection and a field in the other collection.
+    // project is used to select the fields we want to display in the response.
+    // turn the flag to 1 so that they be displayed.
+
+    const channel = await User.aggregate([
+        {
+            $match:{
+                username:username.toLowercase()
+            }
+        },
+        {
+            $lookup:{
+                from:'subscriptions', // from subscription model. we get the name Subscription but in mongoDb it gets changed to subscriptions so we use this name.
+                localField:'_id',
+                foreignField:'channel', // to find no of subscribers, we need to select channel (no of times channel is present in the documents = no of subscribers )
+                as:'subscribers'
+            }
+        },
+        {
+            $lookup:{
+                from:'subscriptions',
+                localField:'_id',
+                foreignField:'subscriber', // to find no of videos, we need to select subscriber (no of times subscriber is present in the documents = no of channels subscribed)
+                as:"subscribedTo"
+            }
+        },
+        {
+            $addFields:{
+                subscribersCount:{
+                    $size:"$subscribers" // this counts no of times subscribers is appeared i.e . no of subscribers.
+                },
+                channelsSubscribedToCount:{
+                    $siize:"$subscribedTo" // this counts no of times subscribedTo is appeared i.e . no of channels subscribed.
+                },
+                isSubscribed:{
+                    $cond:{
+                        if:{$in:[req.user._id,"$subscribers.subscriber"]},// if user is logged in we have req.user so we match the id and check if it is present in the subscribers object , and in model we have subscriber so we use it.
+                        then:true,
+                        else:false,
+                        // cond has 3 fields id,then,else .
+                        // $in takes an array input  in (value,array/object) form and checks whether the value is present in the object or not.
+                    }
+                }
+            }
+        },
+        {
+           $project:{
+            username:1,
+            fullName:1,
+            email:1,
+            isSubscribed:1,
+            subscribersCount:1,
+            channelsSubscribedToCount:1,
+            avatar:1,
+            coverImage:1,
+
+           }
+        },
+    ])
+    // aggregate returns a promise that resolves to an array of documents.
+    // we need only the first element.
+    
+    if (!channel?.length) {
+        throw new ApiError(404, 'Channel not found');
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200,
+            channel[0],
+            "channel fetched successfully"
+        )
+    )
+
+ })
+
+ const getWatchHistory = asyncHandler(async(req,res)=>{
+    const user = await User.aggregate([
+        {
+            _id: new mongoose.Types.ObjectId(req.user._id)
+        }, // we got the user whose watch history is to be fetched.
+        {
+            $lookup:{ // now im inside user. and doing the lookup
+                from:'videos', // from video model
+                localField:'watchHistory', // from user model.
+                foreignField:'_id',
+                as:'watchHistory',
+                pipeline:[ // for subpipeline as we need to get the video details like owner , title, thumbnail etc. for every video.
+                    {
+                        $lookup:{ // now im inside the videos and doing the lookup to join the owner of the video.
+                            from:'users',
+                            localField:'owner',
+                            foreignField:'_id',
+                            as:'owner', // this will be an array of owners. we got all the properties of the user model.but we dont want all these so we use project inside this
+                            pipeline:[
+                                {
+                                    $project:{
+                                        fullName:1,
+                                        avatar:1,
+                                        username:1,
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields:{
+                            $first:"$owner"
+                        } // so that we directly get the first element from the array we dont need to use array[0] everytime.
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200,
+            user[0].watchHistory,
+            "Watch History Fetched Successfully",
+        )
+    )
+
+ })
+
+ 
+
+
+ // (imp) when we use req.user._id => what we get is not mongoDb id, we get a string if we want actual mongoDb id, then we need to do ObjectId('the_string_which_we_got')
+ // but as we use mongoose , it does this work for us , so we get the actual id in req.user._id.
+ // but in aggregation pipelines , mongoose does not interfere.the code is taken directly .so we need to convert the string to actual id.
+
+
 
 
 export{
@@ -416,4 +564,8 @@ export{
     updateAccountDetails,
     updateUserAvatar,
     updateUserCoverImage,
+    getUserChannelProfile,
+    getWatchHistory,
+
+
 }
