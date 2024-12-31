@@ -196,8 +196,8 @@ const logoutUser = asyncHandler(async(req,res) => {
     await User.findByIdAndUpdate(      // another method . we can also find the userby id first and then update the refresh token.here it is done in a single go.
         req.user._id,
         {
-            $set:{
-                refreshToken:undefined
+            $unset:{
+                refreshToken:1 // this removes the field from the document.
             }
         },
         {
@@ -544,7 +544,7 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 
  })
 
- 
+
 
 
  // (imp) when we use req.user._id => what we get is not mongoDb id, we get a string if we want actual mongoDb id, then we need to do ObjectId('the_string_which_we_got')
